@@ -1,0 +1,4 @@
+name: ShineDungeons
+version: '${version}'
+main: ru.batr.shinedungeons.ShineDungeons
+api-version: '1.19'
