@@ -1,3 +1,4 @@
-#lol
-def:
-  aa: 'sss'
+#here stores data, place don't change it if you don't know what are you doing!
+data:
+  mobs: {}
+  savedMobs: {}

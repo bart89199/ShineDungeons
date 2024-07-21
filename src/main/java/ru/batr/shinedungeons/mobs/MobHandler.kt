@@ -1,22 +1,21 @@
-package ru.batr.sd.mobs
+package ru.batr.shinedungeons.mobs
 
+import org.bukkit.entity.Entity
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDeathEvent
+import org.bukkit.event.world.EntitiesLoadEvent
 import org.bukkit.inventory.ItemStack
-import java.util.UUID
+import java.util.*
 import java.util.concurrent.ThreadLocalRandom
 
 class MobHandler : Listener {
 
-    companion object {
-        val map = HashMap<UUID, CustomLivingMob>()
-    }
-
     @EventHandler
     fun onDamage(event: EntityDamageByEntityEvent) {
-        val customMob = map[event.damager.uniqueId]
+        loadMob(event.entity)
+        val customMob = loadedCustomMobs[event.damager.uniqueId]
         if (customMob != null) {
             event.damage = customMob.damage
         }
@@ -24,7 +23,8 @@ class MobHandler : Listener {
 
     @EventHandler
     fun onDead(event: EntityDeathEvent) {
-        val customMob = map[event.entity.uniqueId]
+        loadMob(event.entity)
+        val customMob = loadedCustomMobs[event.entity.uniqueId]
         if (customMob != null) {
             val drops = event.drops
             drops.clear()
@@ -33,7 +33,27 @@ class MobHandler : Listener {
                 drop.amount = (drop.amount * ThreadLocalRandom.current().nextFloat()).toInt()
                 if (drop.amount != 0) drops.add(drop)
             }
-            map.remove(event.entity.uniqueId)
+            loadedCustomMobs.remove(event.entity.uniqueId)
+        }
+    }
+
+    @EventHandler
+    fun onLoad(event: EntitiesLoadEvent) {
+        for (entity in event.entities) {
+            loadMob(entity)
+        }
+    }
+
+    companion object {
+        val loadedCustomMobs = HashMap<UUID, CustomLivingMob>()
+        val unloadedCustomMobs = HashMap<UUID, CustomMob>()
+
+        fun loadMob(entity: Entity) {
+            val customMob = unloadedCustomMobs[entity.uniqueId]
+            if (customMob != null) {
+                unloadedCustomMobs.remove(entity.uniqueId)
+                loadedCustomMobs[entity.uniqueId] = customMob.toLivingMob(entity)
+            }
         }
     }
 }

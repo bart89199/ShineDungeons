@@ -1,96 +1,179 @@
-package ru.batr.sd.configs.containers
+package ru.batr.shinedungeons.configs.containers
 
 import org.bukkit.Location
 import org.bukkit.OfflinePlayer
+import org.bukkit.configuration.ConfigurationSection
 import org.bukkit.inventory.ItemStack
-import ru.batr.sd.configs.Config
-import ru.batr.sd.mobs.CustomMob
+import ru.batr.shinedungeons.configs.Config
+import ru.batr.shinedungeons.configs.containers.Container.Converter
+import ru.batr.shinedungeons.configs.containers.Container.Saver
 
-abstract class Container<T>(val config: Config, val path: String, val default: T) {
+interface Container<T> {
 
     var value: T
-        get() = get()
-        set(value) {
-            config.config.set(path, value)
-            config.save()
-        }
 
-    abstract fun get() : T
+    fun interface Converter<T> {
+        fun toT(value: Any?): T?
+    }
 
-    class IntContainer(config: Config, path: String, default: Int) : Container<Int>(config, path, default) {
-        override fun get(): Int {
-            return config.config.getInt(path, default)
-        }
+    fun interface Saver<T> {
+        fun save(value: T, path: String, config: Config)
     }
-    class DoubleContainer(config: Config, path: String, default: Double) : Container<Double>(config, path, default) {
-        override fun get(): Double {
-            return config.config.getDouble(path, default)
-        }
-    }
-    class BooleanContainer(config: Config, path: String, default: Boolean) : Container<Boolean>(config, path, default) {
-        override fun get(): Boolean {
-            return config.config.getBoolean(path, default)
-        }
-    }
-    class StringContainer(config: Config, path: String, default: String) : Container<String>(config, path, default) {
-        override fun get(): String {
-            return config.config.getString(path, default) ?: default
-        }
-    }
-    class ItemStackContainer(config: Config, path: String, default: ItemStack) : Container<ItemStack>(config, path, default) {
-        override fun get(): ItemStack {
-            return config.config.getSerializable(path, ItemStack::class.java, default) ?: default
-        }
-    }
-    class LocationContainer(config: Config, path: String, default: Location) : Container<Location>(config, path, default) {
-        override fun get(): Location {
-            return config.config.getSerializable(path, Location::class.java, default) ?: default
-        }
-    }
-    class OfflinePlayerContainer(config: Config, path: String, default: OfflinePlayer) : Container<OfflinePlayer>(config, path, default) {
-        override fun get(): OfflinePlayer {
-            return config.config.getSerializable(path, OfflinePlayer::class.java, default) ?: default
-        }
-    }
-    class CustomMobContainer(config: Config, path: String, default: CustomMob) : Container<CustomMob>(config, path, default) {
-        override fun get(): CustomMob {
-            return config.config.getSerializable(path, CustomMob::class.java, default) ?: default
-        }
-    }
-    abstract class ListContainer<T>(config: Config, path: String, default: List<T>) : Container<List<T>>(config, path, default) {
-        override fun get(): List<T> {
-            val got = config.config.getList(path) ?: default
-            val ans = ArrayList<T>()
-            for (i in got) {
-                ans.add(toT(i ?: continue) ?: continue)
+
+    open class DefaultContainer<T>(
+        val config: Config,
+        val path: String,
+        val default: T,
+        val converter: Converter<T>,
+        val saver: Saver<T> = defaultSaver()
+    ) : Container<T> {
+        override var value: T
+            get() {
+                val value = config.config.get(path)
+                return converter.toT(value) ?: default
             }
-            return ans
+            set(value) = saver.save(value, path, config)
+    }
+
+    open class ListContainer<T> (
+        val config: Config,
+        val path: String,
+        val default: List<T>,
+        val converter: Converter<T>,
+        val saver: Saver<List<T>> = defaultSaver(),
+    ) : Container<List<T>> {
+        override var value: List<T>
+            get() {
+                val value = config.config.getList(path) ?: return default
+                val output = ArrayList<T>()
+                for (i in value) {
+                    output.add(converter.toT(i) ?: continue)
+                }
+                return output
+            }
+            set(value) = saver.save(value, path, config)
+        fun add(value: T) {
+            val list = this.value.toMutableList()
+            list.add(value)
+            this.value = list
+        }
+        fun set(index: Int, value: T) {
+            val list = this.value.toMutableList()
+            list[index] = value
+            this.value = list
+        }
+        fun remove(value: T): Boolean {
+            val list = this.value.toMutableList()
+            val res = list.remove(value)
+            this.value = list
+            return res
+        }
+        fun removeAt(index: Int): T {
+            val list = this.value.toMutableList()
+            val res = list.removeAt(index)
+            this.value = list
+            return res
         }
 
-        abstract fun toT(got: Any): T?
     }
-    class IntListContainer(config: Config, path: String, default: List<Int>) : ListContainer<Int>(config, path, default) {
-        override fun toT(got: Any) = if (got is Number) got.toInt() else null
+
+    open class MapContainer<T> (
+        val config: Config,
+        val path: String,
+        val default: Map<String, T>,
+        val converter: Converter<T>,
+        val saver: Saver<Map<String, T>> = saveMap(),
+    ) : Container<Map<String, T>> {
+        override var value: Map<String, T>
+            get() {
+                val input = config.config.get(path) ?: return default
+                return if (input is ConfigurationSection) {
+                    val keys = input.getKeys(false)
+                    val output = HashMap<String, T>()
+                    for (key in keys) {
+                        output[key] = converter.toT(input.get(key) ?: continue) ?: continue
+                    }
+                    output
+                } else if (input is Map<*, *>) {
+                    val output = HashMap<String, T>()
+                    for ((v, k) in input) {
+                        output[v.toString()] = converter.toT(k ?: continue) ?: continue
+                    }
+                    output
+                } else default
+            }
+            set(value) = saver.save(value, path, config)
+        fun set(key: String, value: T) {
+            val map = this.value.toMutableMap()
+            map[key] = value
+            this.value = map
+        }
+        fun remove(key: String): T? {
+            val map = this.value.toMutableMap()
+            val res = map.remove(key)
+            this.value = map
+            return res
+        }
+        fun remove(key: String, value: T): Boolean {
+            val map = this.value.toMutableMap()
+            val res = map.remove(key, value)
+            this.value = map
+            return res
+        }
     }
-    class DoubleListContainer(config: Config, path: String, default: List<Double>) : ListContainer<Double>(config, path, default) {
-        override fun toT(got: Any) = if (got is Number) got.toDouble() else null
-    }
-    class BooleanListContainer(config: Config, path: String, default: List<Boolean>) : ListContainer<Boolean>(config, path, default) {
-        override fun toT(got: Any) = if (got is Boolean) got else null
-    }
-    class StringListContainer(config: Config, path: String, default: List<String>) : ListContainer<String>(config, path, default) {
-        override fun toT(got: Any) = got.toString()
-    }
-    class ItemStackListContainer(config: Config, path: String, default: List<ItemStack>) : ListContainer<ItemStack>(config, path, default) {
-        override fun toT(got: Any) = if (got is ItemStack) got else null
-    }
-    class LocationListContainer(config: Config, path: String, default: List<Location>) : ListContainer<Location>(config, path, default) {
-        override fun toT(got: Any) = if (got is Location) got else null
-    }
-    class OfflinePlayerListContainer(config: Config, path: String, default: List<OfflinePlayer>) : ListContainer<OfflinePlayer>(config, path, default) {
-        override fun toT(got: Any) = if (got is OfflinePlayer) got else null
-    }
-    class CustomMobListContainer(config: Config, path: String, default: List<CustomMob>) : ListContainer<CustomMob>(config, path, default) {
-        override fun toT(got: Any) = if (got is CustomMob) got else null
+
+    companion object {
+        fun <T> defaultSaver() = Saver<T> { value, path1, config1 ->
+            config1.config.set(path1, value)
+            config1.save()
+        }
+
+        val toInt = Converter { input: Any? -> if (input is Number) input.toInt() else null }
+        val toByte = Converter { input: Any? -> if (input is Number) input.toByte() else null }
+        val toShort = Converter { input: Any? -> if (input is Number) input.toShort() else null }
+        val toDouble = Converter { input: Any? -> if (input is Number) input.toDouble() else null }
+        val toFloat = Converter { input: Any? -> if (input is Number) input.toFloat() else null }
+        val toLong = Converter { input: Any? -> if (input is Number) input.toLong() else null }
+        val toBoolean = Converter { input: Any? -> if (input is Boolean) input else null }
+        val toString = Converter { input: Any? -> input?.toString() }
+        val toItemStack = Converter { input: Any? -> if (input is ItemStack) input else null }
+        val toLocation = Converter { input: Any? -> if (input is Location) input else null }
+        val toOfflinePlayer = Converter { input: Any? -> if (input is OfflinePlayer) input else null }
+
+        fun <T> toList(converter: Converter<T>) = Converter { input: Any? ->
+            if (input is List<*>) {
+                val output = ArrayList<T>()
+                for (i in input) {
+                    output.add(converter.toT(i ?: continue) ?: continue)
+                }
+                output
+            } else null
+        }
+
+        fun <T> toMap(converter: Converter<T>) = Converter<Map<String, T>> { input: Any? ->
+            if (input is ConfigurationSection) {
+                val keys = input.getKeys(false)
+                val output = HashMap<String, T>()
+                for (key in keys) {
+                    output[key] = converter.toT(input.get(key) ?: continue) ?: continue
+                }
+                output
+            } else if (input is Map<*, *>) {
+                val output = HashMap<String, T>()
+                for ((v, k) in input) {
+                    output[v.toString()] = converter.toT(k ?: continue) ?: continue
+                }
+                output
+            } else null
+        }
+
+        fun <T> saveMap(saver: Saver<T> = defaultSaver()) =
+            Saver { map: Map<String, T>, path: String, config: Config ->
+                config.config.set(path, null)
+                for ((k, v) in map) {
+                    saver.save(v, "$path.$k", config)
+                }
+                config.save()
+            }
     }
 }

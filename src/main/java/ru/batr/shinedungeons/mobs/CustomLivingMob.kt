@@ -1,19 +1,13 @@
-package ru.batr.sd.mobs
+package ru.batr.shinedungeons.mobs
 
 import net.kyori.adventure.text.Component
-import org.bukkit.Location
 import org.bukkit.Material
-import org.bukkit.entity.Entity
-import org.bukkit.entity.EntityType
-import org.bukkit.entity.LivingEntity
+import org.bukkit.attribute.Attribute
 import org.bukkit.entity.Mob
-import org.bukkit.entity.Zombie
-import org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason
-import org.bukkit.inventory.EntityEquipment
 import org.bukkit.inventory.ItemStack
-import org.bukkit.loot.LootTable
 import org.bukkit.loot.LootTables
 import org.bukkit.potion.PotionEffect
+import kotlin.collections.ArrayList
 
 class CustomLivingMob(
     name: String,
@@ -21,7 +15,6 @@ class CustomLivingMob(
     val mob: Mob,
     health: Double,
     damage: Double,
-    aggressive: Boolean,
     loot: List<ItemStack>,
     itemInMainHand: ItemStack = ItemStack(Material.AIR),
     itemInOffHand: ItemStack = ItemStack(Material.AIR),
@@ -33,8 +26,9 @@ class CustomLivingMob(
     effects: List<PotionEffect> = ArrayList(),
     hasAI: Boolean = true,
     isNameVisible: Boolean = true,
-    isAware: Boolean = true,
-    defTarget: LivingEntity? = null,
+    isInvulnerable: Boolean = true,
+    isSilent: Boolean = false,
+    hasGravity: Boolean = true,
 ) :
     CustomMob(
         name,
@@ -42,7 +36,6 @@ class CustomLivingMob(
         mob.type,
         health,
         damage,
-        aggressive,
         loot,
         itemInMainHand,
         itemInOffHand,
@@ -54,15 +47,18 @@ class CustomLivingMob(
         effects,
         hasAI,
         isNameVisible,
-        isAware
+        isInvulnerable,
+        isSilent,
+        hasGravity,
     ) {
-    init {
+    fun configure() {
+        MobHandler.loadedCustomMobs[mob.uniqueId] = this
         mob.customName(displayName)
         mob.isCustomNameVisible = isNameVisible
+        val maxHealth = mob.getAttribute(Attribute.GENERIC_MAX_HEALTH)
+        maxHealth!!.baseValue = health
         mob.health = health
-        mob.target = defTarget
-        mob.isAggressive = aggressive
-        mob.isAware = isAware
+        mob.isInvulnerable = isInvulnerable
         mob.lootTable = LootTables.EMPTY.lootTable
         mob.setAI(hasAI)
         val equipment = mob.equipment
@@ -74,8 +70,51 @@ class CustomLivingMob(
         equipment.boots = boots
         mob.addPotionEffects(effects)
         mob.canPickupItems = canPickUpItems
+        mob.isSilent = isSilent
+        mob.setGravity(hasGravity)
+        mob.removeWhenFarAway = false
+    }
 
+    fun toCustomMob() = CustomMob(
+        name,
+        displayName,
+        entityType,
+        health,
+        damage,
+        loot,
+        itemInMainHand,
+        itemInOffHand,
+        helmet,
+        chestplate,
+        leggings,
+        boots,
+        canPickUpItems,
+        effects,
+        hasAI,
+        isNameVisible,
+        isInvulnerable,
+        isSilent,
+        hasGravity,
+    )
 
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is CustomLivingMob) return false
+        if (!super.equals(other)) return false
+
+        if (mob != other.mob) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = super.hashCode()
+        result = 31 * result + mob.hashCode()
+        return result
+    }
+
+    override fun toString(): String {
+        return "CustomLivingMob(mob=$mob)"
     }
 
 

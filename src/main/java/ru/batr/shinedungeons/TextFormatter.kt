@@ -1,4 +1,4 @@
-package ru.batr.sd
+package ru.batr.shinedungeons
 
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.minimessage.MiniMessage
@@ -17,6 +17,11 @@ object TextFormatter {
     ) = serializer.deserialize(input, *placeholders)
 
     fun format(
+        input: Component,
+        serializer: MiniMessage = DEFAULT_SERIALIZER,
+    ) = serializer.serialize(input)
+
+    fun format(
         input: List<String>,
         serializer: MiniMessage = DEFAULT_SERIALIZER,
         vararg placeholders: TagResolver = DEFAULT_PLACEHOLDERS
@@ -24,7 +29,19 @@ object TextFormatter {
         val output = ArrayList<Component>();
 
         for (i in input) {
-            output.add(serializer.deserialize(i))
+            output.add(serializer.deserialize(i, *placeholders))
+        }
+        return output
+    }
+
+    fun format(
+        input: List<Component>,
+        serializer: MiniMessage = DEFAULT_SERIALIZER,
+    ): List<String> {
+        val output = ArrayList<String>();
+
+        for (i in input) {
+            output.add(serializer.serialize(i))
         }
         return output
     }

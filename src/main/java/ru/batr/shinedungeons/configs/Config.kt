@@ -1,8 +1,8 @@
-package ru.batr.sd.configs
+package ru.batr.shinedungeons.configs
 
 import com.google.common.base.Charsets
 import org.bukkit.configuration.file.YamlConfiguration
-import ru.batr.sd.SD
+import ru.batr.shinedungeons.ShineDungeons
 import java.io.File
 import java.io.IOException
 import java.io.InputStreamReader
@@ -16,20 +16,16 @@ abstract class Config(val fileName: String, val path: String) {
     val fullPath: String
             get() = if (path != "") "$path${File.separator}$fileName.yml" else "$fileName.yml"
 
+    init {
+        load()
+    }
+
     fun load() {
-        file = File(fullPath)
+        file = File("${ShineDungeons.instance.dataFolder}${File.separator}$fullPath")
         if (!file.exists()) {
-            SD.instance.saveResource(fullPath, false)
+            ShineDungeons.instance.saveResource(fullPath, false)
         }
-        try {
-            config.load(file)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            SD.instance.logger.log(
-                Level.SEVERE,
-                "Problems with load $fileName please check updates or contact with author"
-            )
-        }
+        reload()
     }
 
     fun reload() {
@@ -38,7 +34,7 @@ abstract class Config(val fileName: String, val path: String) {
         config.setDefaults(
             YamlConfiguration.loadConfiguration(
                 InputStreamReader(
-                    SD.instance.getResource(fullPath) ?: return, Charsets.UTF_8
+                    ShineDungeons.instance.getResource(fullPath) ?: return, Charsets.UTF_8
                 )
             )
         )
@@ -49,7 +45,7 @@ abstract class Config(val fileName: String, val path: String) {
             config.save(file)
         } catch (e: IOException) {
             e.printStackTrace()
-            SD.instance.logger.log(
+            ShineDungeons.instance.logger.log(
                 Level.SEVERE,
                 "Problems with save $fileName.yml please check updates or contact with author"
             )
